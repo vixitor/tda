@@ -10,7 +10,7 @@ import operator
 
 import clip
 from utils import *
-
+import torchattacks
 
 def get_arguments():
     """Get arguments of the test-time adaptation."""
@@ -51,7 +51,7 @@ def compute_cache_logits(image_features, cache, alpha, beta, clip_weights, neg_m
                 if neg_mask_thresholds:
                     cache_values.append(item[2])
                 else:
-                    cache_values.append(class_index)
+                    cache_xvalues.append(class_index)
 
         cache_keys = torch.cat(cache_keys, dim=0).permute(1, 0)
         if neg_mask_thresholds:
@@ -76,7 +76,9 @@ def run_test_tda(pos_cfg, neg_cfg, loader, clip_model, clip_weights):
             neg_params = {k: neg_cfg[k] for k in ['shot_capacity', 'alpha', 'beta', 'entropy_threshold', 'mask_threshold']}
 
         #Test-time adaptation
+        atk = torchattacks.PGD(clip_model, eps=4/255, alpha=1/255, steps=7, random_start=True)
         for i, (images, target) in enumerate(tqdm(loader, desc='Processed test images: ')):
+            images = atk(images, target)
             image_features, clip_logits, loss, prob_map, pred = get_clip_logits(images ,clip_model, clip_weights)
             target, prop_entropy = target.cuda(), get_entropy(loss, clip_weights)
 
