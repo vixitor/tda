@@ -79,7 +79,7 @@ def compute_cache_logits(image_features, cache, alpha, beta, clip_weights, neg_m
         cache_logits = ((-1) * (beta - beta * affinity)).exp() @ cache_values
         return alpha * cache_logits
 
-def run_test_tda(pos_cfg, neg_cfg, loader, clip_model, clip_weights):
+def run_test_tda(pos_cfg, neg_cfg, loader, clip_model, clip_weights, preprocess):
     pos_cache, neg_cache, accuracies = {}, {}, []
 
     #Unpack all hyperparameters
@@ -171,7 +171,7 @@ def main():
             run_name = f"{dataset_name}"
             run = wandb.init(project="ETTA-CLIP", config=cfg, group=group_name, name=run_name)
 
-        acc = run_test_tda(cfg['positive'], cfg['negative'], test_loader, clip_model, clip_weights)
+        acc = run_test_tda(cfg['positive'], cfg['negative'], test_loader, clip_model, clip_weights, preprocess)
 
         if args.wandb:
             wandb.log({f"{dataset_name}": acc})
