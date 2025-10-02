@@ -66,7 +66,7 @@ def compute_cache_logits(image_features, cache, alpha, beta, clip_weights, neg_m
                 if neg_mask_thresholds:
                     cache_values.append(item[2])
                 else:
-                    cache_xvalues.append(class_index)
+                    cache_values.append(class_index)
 
         cache_keys = torch.cat(cache_keys, dim=0).permute(1, 0)
         if neg_mask_thresholds:
