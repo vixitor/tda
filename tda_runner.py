@@ -9,8 +9,24 @@ import torch.nn.functional as F
 import operator
 from torchvision import transforms
 import clip
+import custom_clip
 from utils import *
 import torchattacks
+class ClipAttackWrapper(torch.nn.Module):
+    def __init__(self, clip_model, clip_weights):
+        super().__init__()
+        self.clip_model = clip_model
+        self.clip_weights = clip_weights
+
+    def forward(self, image):
+        image_features = self.clip_model.encode_image(image)
+        # 对图像和文本特征进行归一化
+        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        # clip_weights 应该已经是归一化的文本特征
+        # 计算 logits
+        logits = 100. * image_features @ self.clip_weights
+        return logits
+
 def get_arguments():
     """Get arguments of the test-time adaptation."""
     parser = argparse.ArgumentParser()
@@ -75,7 +91,8 @@ def run_test_tda(pos_cfg, neg_cfg, loader, clip_model, clip_weights):
             neg_params = {k: neg_cfg[k] for k in ['shot_capacity', 'alpha', 'beta', 'entropy_threshold', 'mask_threshold']}
 
         #Test-time adaptation
-        atk = torchattacks.PGD(clip_model, eps=4/255, alpha=1/255, steps=7, random_start=True)
+        attack_model = ClipAttackWrapper(clip_model, clip_weights)
+        atk = torchattacks.PGD(attack_model, eps=4/255, alpha=1/255, steps=7, random_start=True)
         for i, (images, target) in enumerate(tqdm(loader, desc='Processed test images: ')):
             if True:
                 image = images[0]
