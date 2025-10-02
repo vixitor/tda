@@ -9,7 +9,6 @@ import torch.nn.functional as F
 import operator
 from torchvision import transforms
 import clip
-import custom_clip
 from utils import *
 import torchattacks
 class ClipAttackWrapper(torch.nn.Module):
