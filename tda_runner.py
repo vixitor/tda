@@ -7,11 +7,10 @@ from datetime import datetime
 import torch
 import torch.nn.functional as F
 import operator
-
+from torchvision import transforms
 import clip
 from utils import *
 import torchattacks
-
 def get_arguments():
     """Get arguments of the test-time adaptation."""
     parser = argparse.ArgumentParser()
@@ -67,7 +66,7 @@ def compute_cache_logits(image_features, cache, alpha, beta, clip_weights, neg_m
 def run_test_tda(pos_cfg, neg_cfg, loader, clip_model, clip_weights):
     with torch.no_grad():
         pos_cache, neg_cache, accuracies = {}, {}, []
-        
+
         #Unpack all hyperparameters
         pos_enabled, neg_enabled = pos_cfg['enabled'], neg_cfg['enabled']
         if pos_enabled:
@@ -78,7 +77,14 @@ def run_test_tda(pos_cfg, neg_cfg, loader, clip_model, clip_weights):
         #Test-time adaptation
         atk = torchattacks.PGD(clip_model, eps=4/255, alpha=1/255, steps=7, random_start=True)
         for i, (images, target) in enumerate(tqdm(loader, desc='Processed test images: ')):
-            images = atk(images, target)
+            if True:
+                image = images[0]
+                adv_image = atk(image, target)
+                img_adv = transforms.ToPILImage()(adv_image.squeeze(0))
+                images = data_transform(img_adv)
+                images = [_.unsqueeze(0) for _ in images]
+
+            images = torch.cat(images, dim=0)
             image_features, clip_logits, loss, prob_map, pred = get_clip_logits(images ,clip_model, clip_weights)
             target, prop_entropy = target.cuda(), get_entropy(loss, clip_weights)
 
@@ -94,14 +100,14 @@ def run_test_tda(pos_cfg, neg_cfg, loader, clip_model, clip_weights):
             if neg_enabled and neg_cache:
                 final_logits -= compute_cache_logits(image_features, neg_cache, neg_params['alpha'], neg_params['beta'], clip_weights, (neg_params['mask_threshold']['lower'], neg_params['mask_threshold']['upper']))
 
-                
-            acc = cls_acc(final_logits, target)  
+
+            acc = cls_acc(final_logits, target)
             accuracies.append(acc)
             wandb.log({"Averaged test accuracy": sum(accuracies)/len(accuracies)}, commit=True)
 
             if i%1000==0:
                 print("---- TDA's test accuracy: {:.2f}. ----\n".format(sum(accuracies)/len(accuracies)))
-        print("---- TDA's test accuracy: {:.2f}. ----\n".format(sum(accuracies)/len(accuracies)))   
+        print("---- TDA's test accuracy: {:.2f}. ----\n".format(sum(accuracies)/len(accuracies)))
         return sum(accuracies)/len(accuracies)
 
 
