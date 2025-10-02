@@ -105,10 +105,9 @@ def run_test_tda(pos_cfg, neg_cfg, loader, clip_model, clip_weights, preprocess)
             # 修正：直接使用预处理过的对抗性图像
             images = preprocess(img_adv).unsqueeze(0)
 
-
         # 后续操作在 no_grad 环境下进行，以节省内存和计算资源
         with torch.no_grad():
-            images = images.cuda() # 确保图像在正确的设备上
+
             image_features, clip_logits, loss, prob_map, pred = get_clip_logits(images ,clip_model, clip_weights)
             target, prop_entropy = target.cuda(), get_entropy(loss, clip_weights)
 
