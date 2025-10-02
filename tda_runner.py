@@ -95,7 +95,7 @@ def run_test_tda(pos_cfg, neg_cfg, loader, clip_model, clip_weights, preprocess)
 
     for i, (images, target) in enumerate(tqdm(loader, desc='Processed test images: ')):
         # 对抗攻击需要在梯度计算环境下进行
-        if True:
+        if False:
             image = images[0]
             adv_image = atk(image, target)
             img_adv = transforms.ToPILImage()(adv_image.squeeze(0))
