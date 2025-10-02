@@ -10,6 +10,7 @@ import operator
 from torchvision import transforms
 import clip
 from utils import *
+
 import torchattacks
 class ClipAttackWrapper(torch.nn.Module):
     def __init__(self, clip_model, clip_weights):
@@ -79,28 +80,35 @@ def compute_cache_logits(image_features, cache, alpha, beta, clip_weights, neg_m
         return alpha * cache_logits
 
 def run_test_tda(pos_cfg, neg_cfg, loader, clip_model, clip_weights):
-    with torch.no_grad():
-        pos_cache, neg_cache, accuracies = {}, {}, []
+    pos_cache, neg_cache, accuracies = {}, {}, []
 
-        #Unpack all hyperparameters
-        pos_enabled, neg_enabled = pos_cfg['enabled'], neg_cfg['enabled']
-        if pos_enabled:
-            pos_params = {k: pos_cfg[k] for k in ['shot_capacity', 'alpha', 'beta']}
-        if neg_enabled:
-            neg_params = {k: neg_cfg[k] for k in ['shot_capacity', 'alpha', 'beta', 'entropy_threshold', 'mask_threshold']}
+    #Unpack all hyperparameters
+    pos_enabled, neg_enabled = pos_cfg['enabled'], neg_cfg['enabled']
+    if pos_enabled:
+        pos_params = {k: pos_cfg[k] for k in ['shot_capacity', 'alpha', 'beta']}
+    if neg_enabled:
+        neg_params = {k: neg_cfg[k] for k in ['shot_capacity', 'alpha', 'beta', 'entropy_threshold', 'mask_threshold']}
 
-        #Test-time adaptation
-        attack_model = ClipAttackWrapper(clip_model, clip_weights)
-        atk = torchattacks.PGD(attack_model, eps=4/255, alpha=1/255, steps=7, random_start=True)
-        for i, (images, target) in enumerate(tqdm(loader, desc='Processed test images: ')):
-            if True:
-                image = images[0]
-                adv_image = atk(image, target)
-                img_adv = transforms.ToPILImage()(adv_image.squeeze(0))
-                images = data_transform(img_adv)
-                images = [_.unsqueeze(0) for _ in images]
+    #Test-time adaptation
+    attack_model = ClipAttackWrapper(clip_model, clip_weights)
+    atk = torchattacks.PGD(attack_model, eps=4/255, alpha=1/255, steps=7, random_start=True)
 
-            images = torch.cat(images, dim=0)
+    for i, (images, target) in enumerate(tqdm(loader, desc='Processed test images: ')):
+        # 对抗攻击需要在梯度计算环境下进行
+        if True:
+            image = images[0]
+            adv_image = atk(image, target)
+            img_adv = transforms.ToPILImage()(adv_image.squeeze(0))
+            # 假设 data_transform 在别处定义
+            # images = data_transform(img_adv)
+            # images = [_.unsqueeze(0) for _ in images]
+            # 修正：直接使用预处理过的对抗性图像
+            images = preprocess(img_adv).unsqueeze(0)
+
+
+        # 后续操作在 no_grad 环境下进行，以节省内存和计算资源
+        with torch.no_grad():
+            images = images.cuda() # 确保图像在正确的设备上
             image_features, clip_logits, loss, prob_map, pred = get_clip_logits(images ,clip_model, clip_weights)
             target, prop_entropy = target.cuda(), get_entropy(loss, clip_weights)
 
@@ -119,12 +127,15 @@ def run_test_tda(pos_cfg, neg_cfg, loader, clip_model, clip_weights):
 
             acc = cls_acc(final_logits, target)
             accuracies.append(acc)
-            wandb.log({"Averaged test accuracy": sum(accuracies)/len(accuracies)}, commit=True)
+            if wandb.run is not None:
+                wandb.log({"Averaged test accuracy": sum(accuracies)/len(accuracies)}, commit=True)
 
             if i%1000==0:
                 print("---- TDA's test accuracy: {:.2f}. ----\n".format(sum(accuracies)/len(accuracies)))
-        print("---- TDA's test accuracy: {:.2f}. ----\n".format(sum(accuracies)/len(accuracies)))
-        return sum(accuracies)/len(accuracies)
+
+    print("---- TDA's test accuracy: {:.2f}. ----\n".format(sum(accuracies)/len(accuracies)))
+    return sum(accuracies)/len(accuracies)
+
 
 
 
